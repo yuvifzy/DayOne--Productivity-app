@@ -48,26 +48,44 @@ const seedTasks: Task[] = [
   }
 ];
 
+// Helper for safe ID generation
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments where crypto.randomUUID is not available
+  return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+};
+
 export const TaskService = {
   getTasks: (): Task[] => {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seedTasks));
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (!data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(seedTasks));
+        return seedTasks;
+      }
+      return JSON.parse(data);
+    } catch (error) {
+      console.error("Failed to load tasks from storage", error);
       return seedTasks;
     }
-    return JSON.parse(data);
   },
 
   createTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Task => {
     const tasks = TaskService.getTasks();
     const newTask: Task = {
       ...task,
-      id: crypto.randomUUID(),
+      id: generateId(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
     tasks.push(newTask);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    } catch (error) {
+      console.error("Failed to save task", error);
+    }
     return newTask;
   },
 

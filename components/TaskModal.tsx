@@ -10,11 +10,21 @@ interface TaskModalProps {
   initialData?: Task;
 }
 
+// Safe ID generation helper for subtasks
+const generateSubtaskId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 15);
+};
+
 export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
-  const [startDate, setStartDate] = useState(initialData?.startDate || new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(initialData?.endDate || new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(initialData?.startDate || getTodayStr());
+  const [endDate, setEndDate] = useState(initialData?.endDate || getTodayStr());
   const [priority, setPriority] = useState<Priority>(initialData?.priority || Priority.MEDIUM);
   const [category, setCategory] = useState<Category>(initialData?.category || Category.WORK);
   const [subtasks, setSubtasks] = useState<Subtask[]>(initialData?.subtasks || []);
@@ -24,8 +34,39 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit,
 
   if (!isOpen) return null;
 
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newStart = e.target.value;
+    setStartDate(newStart);
+    // If current end date is before new start date, update end date to match
+    if (endDate < newStart) {
+      setEndDate(newStart);
+    }
+  };
+
+  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEnd = e.target.value;
+    // Extra safety: ensure end date is not before start date
+    if (newEnd >= startDate) {
+      setEndDate(newEnd);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!title.trim()) return;
+    
+    // Validate dates exist
+    if (!startDate || !endDate) {
+      alert("Please select both start and end dates.");
+      return;
+    }
+
+    // Final logical check
+    if (endDate < startDate) {
+      alert("End date cannot be before start date.");
+      return;
+    }
+    
     const taskData = {
       ...(initialData && { id: initialData.id, createdAt: initialData.createdAt }),
       title,
@@ -44,7 +85,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit,
     if (newSubtaskTitle.trim()) {
       setSubtasks([
         ...subtasks,
-        { id: crypto.randomUUID(), title: newSubtaskTitle, isCompleted: false }
+        { id: generateSubtaskId(), title: newSubtaskTitle, isCompleted: false }
       ]);
       setNewSubtaskTitle('');
     }
@@ -60,7 +101,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit,
     try {
       const suggestions = await GeminiService.generateSubtasks(title, description);
       const newSubtasks = suggestions.map(s => ({
-        id: crypto.randomUUID(),
+        id: generateSubtaskId(),
         title: s,
         isCompleted: false
       }));
@@ -141,8 +182,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit,
                 <input
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={handleStartDateChange}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 text-gray-900 dark:text-white outline-none"
+                  required
                 />
               </div>
 
@@ -151,8 +193,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit,
                 <input
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={handleEndDateChange}
+                  min={startDate}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 text-gray-900 dark:text-white outline-none"
+                  required
                 />
               </div>
             </div>

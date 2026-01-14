@@ -16,6 +16,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, onViewTasks, isDark
   
   // Calculate completion rate
   const completionRate = tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
+  
+  // "All tasks completed" logic: if there are tasks and none are pending
+  const isAllCompleted = tasks.length > 0 && pending === 0;
 
   // Data for Priority Chart
   const priorityData = [
@@ -27,12 +30,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, onViewTasks, isDark
 
   // Data for Category Chart (Top 5)
   const categoryCount = tasks.reduce((acc, task) => {
-    acc[task.category] = (acc[task.category] || 0) + 1;
+    const category = task.category as string;
+    acc[category] = (acc[category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
   const categoryData = Object.entries(categoryCount)
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, value]) => ({ name, value: Number(value) }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
@@ -150,22 +154,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ tasks, onViewTasks, isDark
         </div>
       </div>
       
-      {/* Quick Actions / Recent */}
-      <div className="bg-gradient-to-r from-indigo-900 to-purple-900 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
-         <div className="relative z-10 max-w-2xl">
-           <h2 className="text-2xl font-bold mb-2">Ready to conquer the day?</h2>
-           <p className="text-indigo-100 mb-6">You have {pending} pending tasks. Tackle the Urgent ones first to keep your momentum high.</p>
-           <button 
-             onClick={() => onViewTasks({ status: 'all' })}
-             className="bg-white text-indigo-900 px-6 py-2.5 rounded-lg font-semibold hover:bg-gray-100 transition-colors shadow-sm"
-           >
-             View All Tasks
-           </button>
-         </div>
-         {/* Decorative circles */}
-         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl" />
-         <div className="absolute bottom-0 right-20 -mb-10 w-40 h-40 bg-purple-500 opacity-10 rounded-full blur-2xl" />
-      </div>
+      {/* Dynamic CTA Banner / Success State */}
+      {isAllCompleted ? (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-blue-200 dark:border-blue-900/50 shadow-lg flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-500">
+          <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 shadow-xl shadow-blue-500/30">
+            <CheckCircle2 className="w-10 h-10 text-white" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">All tasks completed!</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">Excellent work! You've cleared your schedule. Take a well-deserved break or start planning for tomorrow.</p>
+          <button 
+            onClick={() => onViewTasks({ status: 'completed' })}
+            className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+          >
+            Review completed items
+          </button>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-indigo-900 to-purple-900 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
+           <div className="relative z-10 max-w-2xl">
+             <h2 className="text-2xl font-bold mb-2">Ready to conquer the day?</h2>
+             <p className="text-indigo-100 mb-6">You have {pending} pending tasks. Tackle the Urgent ones first to keep your momentum high.</p>
+             <button 
+               onClick={() => onViewTasks({ status: 'all' })}
+               className="bg-white text-indigo-900 px-6 py-2.5 rounded-lg font-semibold hover:bg-gray-100 transition-colors shadow-sm"
+             >
+               View All Tasks
+             </button>
+           </div>
+           {/* Decorative circles */}
+           <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl" />
+           <div className="absolute bottom-0 right-20 -mb-10 w-40 h-40 bg-purple-500 opacity-10 rounded-full blur-2xl" />
+        </div>
+      )}
     </div>
   );
 };

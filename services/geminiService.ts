@@ -17,9 +17,9 @@ export const GeminiService = {
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: `I have a task titled "${title}" with the description: "${description}". 
-        Please break this down into 3 to 6 actionable subtasks. 
+        Please break this down into 3 to 6 actionable, concise subtasks. 
         Return ONLY a JSON array of strings. Do not include markdown formatting.`,
         config: {
           responseMimeType: "application/json",
@@ -33,7 +33,13 @@ export const GeminiService = {
       const text = response.text;
       if (!text) return [];
       
-      return JSON.parse(text);
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        // Fallback if the model returns markdown wrapped JSON
+        const match = text.match(/\[.*\]/s);
+        return match ? JSON.parse(match[0]) : [];
+      }
     } catch (error) {
       console.error("Gemini API Error:", error);
       return [];
@@ -48,7 +54,7 @@ export const GeminiService = {
 
      try {
        const response = await ai.models.generateContent({
-         model: 'gemini-2.5-flash',
+         model: 'gemini-3-flash-preview',
          contents: `Based on this task: "${title}" - "${description}", suggest a priority level from [LOW, MEDIUM, HIGH, URGENT]. Return only the word.`,
          config: {
            maxOutputTokens: 10,

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Task, TaskFilter, Priority, Category, PRIORITY_COLORS, CATEGORY_COLORS } from '../types';
-import { Search, Filter, Calendar, AlertCircle } from 'lucide-react';
+import { Search, Filter, Calendar, ChevronDown, ChevronUp, CheckCircle2, Circle } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TaskListProps {
@@ -10,6 +10,7 @@ interface TaskListProps {
   onEdit: (task: Task) => void;
   onDelete: (id: string) => void;
   onToggleComplete: (task: Task) => void;
+  onUpdateTask: (task: Task) => void;
 }
 
 export const TaskList: React.FC<TaskListProps> = ({
@@ -19,7 +20,31 @@ export const TaskList: React.FC<TaskListProps> = ({
   onEdit,
   onDelete,
   onToggleComplete,
+  onUpdateTask,
 }) => {
+  const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (id: string) => {
+    setExpandedTasks(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleToggleSubtask = (task: Task, subtaskId: string) => {
+    const updatedSubtasks = task.subtasks.map(st => 
+      st.id === subtaskId ? { ...st, isCompleted: !st.isCompleted } : st
+    );
+    onUpdateTask({ ...task, subtasks: updatedSubtasks });
+  };
+
+  /**
+   * Safely formats a date string to avoid RangeError: Invalid time value.
+   */
+  const safeFormatDate = (dateStr: string, formatStr: string): string => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return format(date, formatStr);
+  };
+
   const filteredTasks = tasks.filter((task) => {
     if (filter.status === 'completed' && !task.isCompleted) return false;
     if (filter.status === 'pending' && task.isCompleted) return false;
@@ -96,73 +121,109 @@ export const TaskList: React.FC<TaskListProps> = ({
             <p className="text-gray-500 dark:text-gray-400">Try adjusting your filters or create a new task.</p>
           </div>
         ) : (
-          filteredTasks.map((task) => (
-            <div
-              key={task.id}
-              className={`group bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all ${
-                task.isCompleted ? 'opacity-75 bg-gray-50 dark:bg-gray-800/50' : ''
-              }`}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <button
-                    onClick={() => onToggleComplete(task)}
-                    className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      task.isCompleted
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'border-gray-300 dark:border-gray-600 hover:border-indigo-500 dark:hover:border-indigo-400 text-transparent'
-                    }`}
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </button>
-                  
-                  <div>
-                    <h3 className={`text-lg font-semibold text-gray-900 dark:text-white ${task.isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>
-                      {task.title}
-                    </h3>
-                    <p className={`mt-1 text-gray-600 dark:text-gray-400 text-sm line-clamp-2 ${task.isCompleted ? 'line-through text-gray-400 dark:text-gray-600' : ''}`}>
-                      {task.description}
-                    </p>
-                    
-                    <div className="flex flex-wrap items-center gap-3 mt-3">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>
-                        {task.priority}
-                      </span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${CATEGORY_COLORS[task.category]}`}>
-                        {task.category}
-                      </span>
-                      <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>{format(new Date(task.startDate), 'MMM d')} - {format(new Date(task.endDate), 'MMM d, yyyy')}</span>
-                      </div>
-                      {task.subtasks && task.subtasks.length > 0 && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {task.subtasks.filter(t => t.isCompleted).length}/{task.subtasks.length} subtasks
+          filteredTasks.map((task) => {
+            const completedSubtasks = task.subtasks?.filter(t => t.isCompleted).length || 0;
+            const totalSubtasks = task.subtasks?.length || 0;
+            const isExpanded = expandedTasks[task.id];
+
+            return (
+              <div
+                key={task.id}
+                className={`group bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden ${
+                  task.isCompleted ? 'opacity-75 bg-gray-50 dark:bg-gray-800/50' : ''
+                }`}
+              >
+                <div className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <button
+                        onClick={() => onToggleComplete(task)}
+                        className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                          task.isCompleted
+                            ? 'bg-indigo-600 border-indigo-600 text-white'
+                            : 'border-gray-300 dark:border-gray-600 hover:border-indigo-500 dark:hover:border-indigo-400 text-transparent'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+                      
+                      <div>
+                        <h3 className={`text-lg font-semibold text-gray-900 dark:text-white transition-all ${task.isCompleted ? 'line-through text-gray-500 dark:text-gray-500' : ''}`}>
+                          {task.title}
+                        </h3>
+                        <p className={`mt-1 text-gray-600 dark:text-gray-400 text-sm line-clamp-2 ${task.isCompleted ? 'line-through text-gray-400 dark:text-gray-600' : ''}`}>
+                          {task.description}
+                        </p>
+                        
+                        <div className="flex flex-wrap items-center gap-3 mt-3">
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>
+                            {task.priority}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${CATEGORY_COLORS[task.category]}`}>
+                            {task.category}
+                          </span>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>
+                              {safeFormatDate(task.startDate, 'MMM d')} - {safeFormatDate(task.endDate, 'MMM d, yyyy')}
+                            </span>
+                          </div>
+                          {totalSubtasks > 0 && (
+                            <button 
+                              onClick={() => toggleExpand(task.id)}
+                              className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+                            >
+                              {completedSubtasks}/{totalSubtasks} subtasks
+                              {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            </button>
+                          )}
                         </div>
-                      )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onEdit(task)}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:text-indigo-700 dark:hover:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => onDelete(task.id)}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onEdit(task)}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:text-indigo-700 dark:hover:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition-colors"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => onDelete(task.id)}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
+                {/* Expanded Subtasks */}
+                {isExpanded && totalSubtasks > 0 && (
+                  <div className="px-5 pb-5 pt-0 border-t border-gray-50 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/20">
+                    <div className="mt-4 space-y-2 pl-10">
+                      {task.subtasks.map((st) => (
+                        <div 
+                          key={st.id} 
+                          className="flex items-center gap-3 cursor-pointer group/subtask"
+                          onClick={() => handleToggleSubtask(task, st.id)}
+                        >
+                          {st.isCompleted ? (
+                            <CheckCircle2 className="w-4 h-4 text-indigo-500" />
+                          ) : (
+                            <Circle className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover/subtask:text-indigo-400" />
+                          )}
+                          <span className={`text-sm ${st.isCompleted ? 'text-gray-400 dark:text-gray-600 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
+                            {st.title}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

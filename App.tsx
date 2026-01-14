@@ -3,17 +3,50 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { TaskList } from './components/TaskList';
 import { TaskModal } from './components/TaskModal';
+import { ConfirmationModal } from './components/ConfirmationModal';
 import { TaskService } from './services/taskService';
 import { Task, TaskFilter } from './types';
 import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'dashboard' | 'tasks'>('dashboard');
+  // Initialize tasks
+  const [tasks, setTasks] = useState<Task[]>(() => TaskService.getTasks());
+  const [loading, setLoading] = useState(false);
+  
+  // View state persistence
+  const [view, setView] = useState<'dashboard' | 'tasks'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dayone_view');
+      return (saved === 'dashboard' || saved === 'tasks') ? saved : 'dashboard';
+    }
+    return 'dashboard';
+  });
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
-  const [filter, setFilter] = useState<TaskFilter>({ status: 'all' });
+  
+  // Confirmation state
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    variant: 'danger' | 'info';
+    onConfirm: () => void;
+  } | null>(null);
+
+  // Filter state
+  const [filter, setFilter] = useState<TaskFilter>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('dayone_filter');
+        return saved ? JSON.parse(saved) : { status: 'all' };
+      } catch {
+        return { status: 'all' };
+      }
+    }
+    return { status: 'all' };
+  });
   
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -33,19 +66,18 @@ const App: React.FC = () => {
     }
   }, [darkMode]);
 
-  const toggleDarkMode = () => setDarkMode(!darkMode);
+  useEffect(() => {
+    localStorage.setItem('dayone_view', view);
+  }, [view]);
 
   useEffect(() => {
-    loadTasks();
-  }, []);
+    localStorage.setItem('dayone_filter', JSON.stringify(filter));
+  }, [filter]);
+
+  const toggleDarkMode = () => setDarkMode(!darkMode);
 
   const loadTasks = () => {
-    setLoading(true);
-    // Simulate network delay for "backend"
-    setTimeout(() => {
-      setTasks(TaskService.getTasks());
-      setLoading(false);
-    }, 600);
+    setTasks(TaskService.getTasks());
   };
 
   const handleCreateTask = (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -55,17 +87,38 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTask = (task: Task) => {
-    TaskService.updateTask(task);
-    loadTasks();
-    setIsModalOpen(false);
-    setEditingTask(undefined);
+    // If it's an existing task being updated, we confirm
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Confirm Changes',
+      message: 'Are you sure you want to save these changes to the task?',
+      confirmLabel: 'Save Changes',
+      variant: 'info',
+      onConfirm: () => {
+        TaskService.updateTask(task);
+        loadTasks();
+        setIsModalOpen(false);
+        setEditingTask(undefined);
+        setConfirmConfig(null);
+      }
+    });
   };
 
   const handleDeleteTask = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
-      TaskService.deleteTask(id);
-      loadTasks();
-    }
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Task',
+      message: 'Are you sure you want to delete this task? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: () => {
+        // Optimistic update
+        setTasks(prev => prev.filter(t => t.id !== id));
+        // Persist
+        TaskService.deleteTask(id);
+        setConfirmConfig(null);
+      }
+    });
   };
 
   const handleEditClick = (task: Task) => {
@@ -74,7 +127,8 @@ const App: React.FC = () => {
   };
 
   const handleToggleComplete = (task: Task) => {
-    TaskService.updateTask({ ...task, isCompleted: !task.isCompleted });
+    const updated = { ...task, isCompleted: !task.isCompleted };
+    TaskService.updateTask(updated);
     loadTasks();
   };
 
@@ -125,6 +179,7 @@ const App: React.FC = () => {
           onEdit={handleEditClick}
           onDelete={handleDeleteTask}
           onToggleComplete={handleToggleComplete}
+          onUpdateTask={handleUpdateTask}
         />
       )}
 
@@ -134,6 +189,18 @@ const App: React.FC = () => {
           onClose={() => setIsModalOpen(false)}
           onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
           initialData={editingTask}
+        />
+      )}
+
+      {confirmConfig && (
+        <ConfirmationModal
+          isOpen={confirmConfig.isOpen}
+          title={confirmConfig.title}
+          message={confirmConfig.message}
+          confirmLabel={confirmConfig.confirmLabel}
+          variant={confirmConfig.variant}
+          onConfirm={confirmConfig.onConfirm}
+          onCancel={() => setConfirmConfig(null)}
         />
       )}
     </Layout>
